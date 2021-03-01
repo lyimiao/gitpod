@@ -22,6 +22,7 @@ import (
 
 const (
 	gitpodBuiltinUserID = "builtin-user-workspace-probe-0000000"
+	perCallTimeout      = 20 * time.Second
 )
 
 type launchWorkspaceDirectlyOptions struct {
@@ -105,7 +106,7 @@ func LaunchWorkspaceDirectly(it *Test, ctx context.Context, opts ...LaunchWorksp
 
 	var workspaceImage string
 	if options.BaseImage != "" {
-		rctx, rcancel := context.WithTimeout(ctx, 20*time.Second)
+		rctx, rcancel := context.WithTimeout(ctx, perCallTimeout)
 		cl := it.API().ImageBuilder()
 		reslv, err := cl.ResolveWorkspaceImage(rctx, &imgbldr.ResolveWorkspaceImageRequest{
 			Source: &imgbldr.BuildSource{
@@ -184,13 +185,14 @@ func LaunchWorkspaceDirectly(it *Test, ctx context.Context, opts ...LaunchWorksp
 		}
 	}
 
-	sctx, scancel := context.WithTimeout(ctx, 10*time.Second)
+	sctx, scancel := context.WithTimeout(ctx, perCallTimeout)
 	sresp, err := it.API().WorkspaceManager().StartWorkspace(sctx, req)
 	scancel()
 	if err != nil {
 		it.t.Fatalf("cannot start workspace: %q", err)
 	}
 
+	// TODO(geropl) It seems we're sometimes loosing events here.
 	time.Sleep(2 * time.Second)
 
 	it.WaitForWorkspace(ctx, instanceID.String())
@@ -210,7 +212,7 @@ func LaunchWorkspaceDirectly(it *Test, ctx context.Context, opts ...LaunchWorksp
 // When possible, prefer the less complex LaunchWorkspaceDirectly.
 func LaunchWorkspaceFromContextURL(it *Test, ctx context.Context, contextURL string) (nfo *protocol.WorkspaceInfo, stopWs func(waitForStop bool)) {
 	server := it.API().GitpodServer()
-	cctx, ccancel := context.WithTimeout(ctx, 10*time.Second)
+	cctx, ccancel := context.WithTimeout(ctx, perCallTimeout)
 	defer ccancel()
 	resp, err := server.CreateWorkspace(cctx, &protocol.CreateWorkspaceOptions{
 		ContextURL: contextURL,
@@ -220,7 +222,7 @@ func LaunchWorkspaceFromContextURL(it *Test, ctx context.Context, contextURL str
 		it.t.Fatalf("cannot start workspace: %q", err)
 	}
 	stopWs = func(waitForStop bool) {
-		sctx, scancel := context.WithTimeout(ctx, 10*time.Second)
+		sctx, scancel := context.WithTimeout(ctx, perCallTimeout)
 		err := server.StopWorkspace(sctx, resp.CreatedWorkspaceID)
 		scancel()
 		if err != nil {
