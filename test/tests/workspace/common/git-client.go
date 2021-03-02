@@ -36,14 +36,59 @@ func (g GitClient) GetBranch(workspaceRoot string) (string, error) {
 	return strings.Trim(resp.Stdout, " \t\n"), nil
 }
 
-func (g GitClient) Commit(workspaceRoot string, message string, all bool) error {
+func (g GitClient) Add(dir string, files ...string) error {
+	args := []string{"add"}
+	if files == nil {
+		args = append(args, ".")
+	} else {
+		args = append(args, files...)
+	}
+	var resp agent.ExecResponse
+	err := g.Call("WorkspaceAgent.Exec", &agent.ExecRequest{
+		Dir:     dir,
+		Command: "git",
+		Args:    args,
+	}, &resp)
+	if err != nil {
+		return err
+	}
+	if resp.ExitCode != 0 {
+		return fmt.Errorf("commit returned rc: %d", resp.ExitCode)
+	}
+	return nil
+}
+
+func (g GitClient) Commit(dir string, message string, all bool) error {
 	args := []string{"commit", "-m", message}
 	if all {
 		args = append(args, "--all")
 	}
 	var resp agent.ExecResponse
 	err := g.Call("WorkspaceAgent.Exec", &agent.ExecRequest{
-		Dir:     workspaceRoot,
+		Dir:     dir,
+		Command: "git",
+		Args:    args,
+	}, &resp)
+	if err != nil {
+		return err
+	}
+	if resp.ExitCode != 0 {
+		return fmt.Errorf("commit returned rc: %d", resp.ExitCode)
+	}
+	return nil
+}
+
+func (g GitClient) Push(dir string, force bool, moreArgs ...string) error {
+	args := []string{"push"}
+	if moreArgs != nil {
+		args = append(args, moreArgs...)
+	}
+	if force {
+		args = append(args, "--force")
+	}
+	var resp agent.ExecResponse
+	err := g.Call("WorkspaceAgent.Exec", &agent.ExecRequest{
+		Dir:     dir,
 		Command: "git",
 		Args:    args,
 	}, &resp)

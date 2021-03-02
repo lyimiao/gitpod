@@ -49,6 +49,8 @@ var (
 )
 
 // NewTest produces a new integration test instance
+// TODO(geropl) have a global registry+ctrl-c handler that calls t.Done() to properly cleanup tests, especially
+// during development
 func NewTest(t *testing.T, timeout time.Duration) (*Test, context.Context) {
 	flag.Parse()
 	kubeconfig := *cfgFlag

@@ -6,8 +6,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os/exec"
+	"strings"
 
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
 	"github.com/gitpod-io/gitpod/test/tests/workspace/workspace_agent/api"
@@ -64,7 +66,8 @@ func (*WorkspaceAgent) Exec(req *api.ExecRequest, resp *api.ExecResponse) (err e
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-			return err
+			fullCommand := strings.Join(append([]string{req.Command}, req.Args...), " ")
+			return fmt.Errorf("%s: %w", fullCommand, err)
 		}
 		rc = exitError.ExitCode()
 	}
