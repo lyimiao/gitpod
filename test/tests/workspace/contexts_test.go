@@ -92,13 +92,10 @@ func runContextTests(t *testing.T, tests []ContextTest) {
 			// TODO(geropl) Why does this not work? Logs hint to a race around bucket creation...?
 			// t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-
-			it := integration.NewTest(t)
+			it, ctx := integration.NewTest(t, 5*time.Minute)
 			defer it.Done()
 
-			nfo, stopWS := integration.LaunchWorkspaceFromContextURL(it, ctx, test.ContextURL)
+			nfo, stopWS := integration.LaunchWorkspaceFromContextURL(it, test.ContextURL)
 			defer stopWS(false) // we do not wait for stopped here as it does not matter for this test case and speeds things up
 
 			wctx, wcancel := context.WithTimeout(ctx, 1*time.Minute)
