@@ -96,8 +96,8 @@ affinity:
 {{- if $gp.components.workspace.affinity.probe -}}{{- $_ := set $expr $gp.components.workspace.affinity.probe "" -}}{{- end -}}
 {{- if $gp.components.workspace.affinity.regular -}}{{- $_ := set $expr $gp.components.workspace.affinity.regular "" -}}{{- end -}}
 {{- end -}}
-{{- /* 
-  In a previous iteration of the templates the node affinity was part of the workspace pod template. 
+{{- /*
+  In a previous iteration of the templates the node affinity was part of the workspace pod template.
   In that case we need to extract the affinity from the template and add it to the workspace affinity set.
 */ -}}
 {{- if $gp.components.workspace.template -}}
@@ -247,7 +247,7 @@ env:
 {{- $comp := .comp -}}
 {{- $tracing := $comp.tracing | default $gp.tracing -}}
 {{- if $tracing }}
-{{- if $tracing.endoint }}          
+{{- if $tracing.endoint }}
 - name: JAEGER_ENDPOINT
   value: {{ $tracing.endoint }}
 {{- else }}

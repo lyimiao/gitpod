@@ -451,9 +451,6 @@ components:
   cerc:
     name: cerc
     disabled: true
-    resources:
-      cpu: 100m
-      memory: 32Mi
     dependsOn:
       - "cerc-configmap.yaml"
     ports:
@@ -530,3 +527,262 @@ mysql:
   extraVolumeMounts: |
     - mountPath: /docker-entrypoint-initdb.d
       name: init-scripts
+
+promtail:
+  enabled: true
+  fullnameOverride: promtail
+
+  initContainer:
+    enabled: true
+    image:
+      registry: docker.io
+      repository: busybox
+      tag: 1.33
+      pullPolicy: IfNotPresent
+    fsInotifyMaxUserInstances: 128
+
+  rbac:
+    pspEnabled: true
+
+  config:
+    serverPort: 3101
+    lokiAddress: http://loki:3100/loki/api/v1/push
+    snippets:
+      scrapeConfigs: |
+        # See also https://github.com/grafana/loki/blob/master/production/ksonnet/promtail/scrape_config.libsonnet for reference
+        # Pods with a label 'app.kubernetes.io/name'
+        - job_name: kubernetes-pods-app-kubernetes-io-name
+          pipeline_stages:
+            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+              target_label: app
+            - action: drop
+              regex: ''
+              source_labels:
+                - app
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_component
+              target_label: component
+            {{- if .Values.config.snippets.addScrapeJobLabel }}
+            - action: replace
+              replacement: kubernetes-pods-app-kubernetes-io-name
+              target_label: scrape_job
+            {{- end }}
+            {{- toYaml .Values.config.snippets.common | nindent 4 }}
+        # Pods with a label 'app'
+        - job_name: kubernetes-pods-app
+          pipeline_stages:
+            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Drop pods with label 'app.kubernetes.io/name'. They are already considered above
+            - action: drop
+              regex: .+
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_label_app
+              target_label: app
+            - action: drop
+              regex: ''
+              source_labels:
+                - app
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_label_component
+              target_label: component
+
+            - action: drop
+              regex: gitpod
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+                - __meta_kubernetes_pod_label_app
+            - action: keep
+              regex: gitpod
+              source_labels:
+                - __meta_kubernetes_namespace
+                - __meta_kubernetes_pod_namespace
+            - action: drop
+              regex: .+
+              source_labels:
+                - __meta_kubernetes_namespace
+                - __meta_kubernetes_pod_namespace
+
+            {{- if .Values.config.snippets.addScrapeJobLabel }}
+            - action: replace
+              replacement: kubernetes-pods-app
+              target_label: scrape_job
+            {{- end }}
+            {{- toYaml .Values.config.snippets.common | nindent 4 }}
+        # Pods with direct controllers, such as StatefulSet
+        - job_name: kubernetes-pods-direct-controllers
+          pipeline_stages:
+            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Drop pods with label 'app.kubernetes.io/name' or 'app'. They are already considered above
+            - action: drop
+              regex: .+
+              separator: ''
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+                - __meta_kubernetes_pod_label_app
+            - action: drop
+              regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
+              source_labels:
+                - __meta_kubernetes_pod_controller_name
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_controller_name
+              target_label: app
+            {{- if .Values.config.snippets.addScrapeJobLabel }}
+            - action: replace
+              replacement: kubernetes-pods-direct-controllers
+              target_label: scrape_job
+            {{- end }}
+            {{- toYaml .Values.config.snippets.common | nindent 4 }}
+        # Pods with indirect controllers, such as Deployment
+        - job_name: kubernetes-pods-indirect-controller
+          pipeline_stages:
+            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Drop pods with label 'app.kubernetes.io/name' or 'app'. They are already considered above
+            - action: drop
+              regex: .+
+              separator: ''
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+                - __meta_kubernetes_pod_label_app
+            - action: keep
+              regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
+              source_labels:
+                - __meta_kubernetes_pod_controller_name
+            - action: replace
+              regex: '([0-9a-z-.]+)-[0-9a-f]{8,10}'
+              source_labels:
+                - __meta_kubernetes_pod_controller_name
+              target_label: app
+            {{- if .Values.config.snippets.addScrapeJobLabel }}
+            - action: replace
+              replacement: kubernetes-pods-indirect-controller
+              target_label: scrape_job
+            {{- end }}
+            {{- toYaml .Values.config.snippets.common | nindent 4 }}
+
+        # All remaining pods not yet covered
+        - job_name: kubernetes-other
+          pipeline_stages:
+            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Drop what has already been covered
+            - action: drop
+              regex: .+
+              separator: ''
+              source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+                - __meta_kubernetes_pod_label_app
+            - action: drop
+              regex: .+
+              source_labels:
+                - __meta_kubernetes_pod_controller_name
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_name
+              target_label: app
+            - action: replace
+              source_labels:
+                - __meta_kubernetes_pod_label_component
+              target_label: component
+            {{- if .Values.config.snippets.addScrapeJobLabel }}
+            - action: replace
+              replacement: kubernetes-other
+              target_label: scrape_job
+            {{- end }}
+            {{- toYaml .Values.config.snippets.common | nindent 4 }}
+    file: |
+      server:
+        log_level: info
+        http_listen_port: {{ .Values.config.serverPort }}
+      client:
+        url: {{ .Values.config.lokiAddress }}
+        {{- tpl .Values.config.snippets.extraClientConfigs . | nindent 2 }}
+      positions:
+        filename: /run/promtail/positions.yaml
+      scrape_configs:
+        {{- tpl .Values.config.snippets.scrapeConfigs . | nindent 2 }}
+        {{- tpl .Values.config.snippets.extraScrapeConfigs . | nindent 2 }}
+
+loki:
+  enabled: true
+  fullnameOverride: loki
+  config:
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+
+    distributor:
+      ring:
+        kvstore:
+          store: memberlist
+
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: memberlist
+          replication_factor: 1
+        final_sleep: 0s
+      chunk_idle_period: 5m
+      chunk_retain_period: 30s
+
+    memberlist:
+      join_members:
+        - loki-headless.gitpod.svc.cluster.local
+      max_join_backoff: 1m
+      max_join_retries: 10
+      min_join_backoff: 1s
+
+    schema_config:
+      configs:
+      - from: 2020-05-15
+        store: boltdb-shipper
+        object_store: s3
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /data/loki/index
+        cache_location: /data/loki/index_cache
+        shared_store: s3
+
+      aws:
+        s3: s3://adminminio:adminminio@minio:9000/logs
+        s3forcepathstyle: true
+
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 24h
+
+  persistence:
+    enabled: true
+    accessModes:
+    - ReadWriteOnce
+    size: 5Gi
