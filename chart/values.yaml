@@ -782,7 +782,7 @@ loki:
       reject_old_samples_max_age: 24h
 
   persistence:
-    enabled: true
+    enabled: false # for testing
     accessModes:
     - ReadWriteOnce
     size: 5Gi
