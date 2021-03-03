@@ -549,168 +549,29 @@ promtail:
     lokiAddress: http://loki:3100/loki/api/v1/push
     snippets:
       scrapeConfigs: |
-        # See also https://github.com/grafana/loki/blob/master/production/ksonnet/promtail/scrape_config.libsonnet for reference
-        # Pods with a label 'app.kubernetes.io/name'
-        - job_name: kubernetes-pods-app-kubernetes-io-name
+        - job_name: workspaces
           pipeline_stages:
             {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
           kubernetes_sd_configs:
             - role: pod
+              # namespaces:
+              #  names:
+              #    - {{ .Release.Namespace }}
           relabel_configs:
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+            # Drop everything that is not a gitpod workspace
+            - source_labels:
+              - __meta_kubernetes_pod_label_component
+              regex: workspace
+              action: keep
+            - source_labels:
+              - __meta_kubernetes_pod_label_app
               target_label: app
-            - action: drop
-              regex: ''
-              source_labels:
-                - app
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_component
-              target_label: component
-            {{- if .Values.config.snippets.addScrapeJobLabel }}
-            - action: replace
-              replacement: kubernetes-pods-app-kubernetes-io-name
-              target_label: scrape_job
-            {{- end }}
-            {{- toYaml .Values.config.snippets.common | nindent 4 }}
-        # Pods with a label 'app'
-        - job_name: kubernetes-pods-app
-          pipeline_stages:
-            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            # Drop pods with label 'app.kubernetes.io/name'. They are already considered above
-            - action: drop
-              regex: .+
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_name
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_label_app
-              target_label: app
-            - action: drop
-              regex: ''
-              source_labels:
-                - app
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_label_component
-              target_label: component
-
-            - action: drop
-              regex: gitpod
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_name
-                - __meta_kubernetes_pod_label_app
-            - action: keep
-              regex: gitpod
-              source_labels:
-                - __meta_kubernetes_namespace
-                - __meta_kubernetes_pod_namespace
-            - action: drop
-              regex: .+
-              source_labels:
-                - __meta_kubernetes_namespace
-                - __meta_kubernetes_pod_namespace
-
-            {{- if .Values.config.snippets.addScrapeJobLabel }}
-            - action: replace
-              replacement: kubernetes-pods-app
-              target_label: scrape_job
-            {{- end }}
-            {{- toYaml .Values.config.snippets.common | nindent 4 }}
-        # Pods with direct controllers, such as StatefulSet
-        - job_name: kubernetes-pods-direct-controllers
-          pipeline_stages:
-            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            # Drop pods with label 'app.kubernetes.io/name' or 'app'. They are already considered above
-            - action: drop
-              regex: .+
-              separator: ''
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_name
-                - __meta_kubernetes_pod_label_app
-            - action: drop
-              regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
-              source_labels:
-                - __meta_kubernetes_pod_controller_name
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_controller_name
-              target_label: app
-            {{- if .Values.config.snippets.addScrapeJobLabel }}
-            - action: replace
-              replacement: kubernetes-pods-direct-controllers
-              target_label: scrape_job
-            {{- end }}
-            {{- toYaml .Values.config.snippets.common | nindent 4 }}
-        # Pods with indirect controllers, such as Deployment
-        - job_name: kubernetes-pods-indirect-controller
-          pipeline_stages:
-            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            # Drop pods with label 'app.kubernetes.io/name' or 'app'. They are already considered above
-            - action: drop
-              regex: .+
-              separator: ''
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_name
-                - __meta_kubernetes_pod_label_app
-            - action: keep
-              regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
-              source_labels:
-                - __meta_kubernetes_pod_controller_name
-            - action: replace
-              regex: '([0-9a-z-.]+)-[0-9a-f]{8,10}'
-              source_labels:
-                - __meta_kubernetes_pod_controller_name
-              target_label: app
-            {{- if .Values.config.snippets.addScrapeJobLabel }}
-            - action: replace
-              replacement: kubernetes-pods-indirect-controller
-              target_label: scrape_job
-            {{- end }}
-            {{- toYaml .Values.config.snippets.common | nindent 4 }}
-
-        # All remaining pods not yet covered
-        - job_name: kubernetes-other
-          pipeline_stages:
-            {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            # Drop what has already been covered
-            - action: drop
-              regex: .+
-              separator: ''
-              source_labels:
-                - __meta_kubernetes_pod_label_app_kubernetes_io_name
-                - __meta_kubernetes_pod_label_app
-            - action: drop
-              regex: .+
-              source_labels:
-                - __meta_kubernetes_pod_controller_name
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_name
-              target_label: app
-            - action: replace
-              source_labels:
-                - __meta_kubernetes_pod_label_component
-              target_label: component
-            {{- if .Values.config.snippets.addScrapeJobLabel }}
-            - action: replace
-              replacement: kubernetes-other
-              target_label: scrape_job
-            {{- end }}
+              action: replace
+            # Add workspace name as a label to it can be used for future filtering
+            - source_labels:
+              - __meta_kubernetes_pod_name
+              target_label: workspace
+              action: replace
             {{- toYaml .Values.config.snippets.common | nindent 4 }}
     file: |
       server:
@@ -723,12 +584,11 @@ promtail:
         filename: /run/promtail/positions.yaml
       scrape_configs:
         {{- tpl .Values.config.snippets.scrapeConfigs . | nindent 2 }}
-        {{- tpl .Values.config.snippets.extraScrapeConfigs . | nindent 2 }}
-
 loki:
   enabled: true
   fullnameOverride: loki
   config:
+    # https://grafana.com/docs/loki/latest/configuration/
     auth_enabled: false
 
     server:
@@ -741,10 +601,10 @@ loki:
             store: memberlist
           replication_factor: 1
         final_sleep: 0s
-      chunk_idle_period: 5m
-      chunk_retain_period: 30s
+      chunk_idle_period: 10m
+      chunk_retain_period: 5m
       chunk_encoding: snappy
-      max_chunk_age: 5m
+      max_chunk_age: 10m
       chunk_target_size: 1572864
 
     schema_config:
@@ -759,7 +619,14 @@ loki:
 
     storage_config:
       aws:
-        s3: "s3://EXAMPLEvalue:Someone.Should/ReallyChangeThisKey!!@minio:9000/logs"
+        bucketnames: logs
+        endpoint: minio:9000
+        # default region
+        region: us-east-1
+        # TODO: refactor. It should be set from main minio values
+        access_key_id: EXAMPLEvalue
+        secret_access_key: Someone.Should/ReallyChangeThisKey!!
+        insecure: true
         s3forcepathstyle: true
 
       boltdb_shipper:
