@@ -210,8 +210,13 @@ func LaunchWorkspaceDirectly(it *Test, opts ...LaunchWorkspaceDirectlyOpt) (res 
 // fail the test.
 //
 // When possible, prefer the less complex LaunchWorkspaceDirectly.
-func LaunchWorkspaceFromContextURL(it *Test, contextURL string) (nfo *protocol.WorkspaceInfo, stopWs func(waitForStop bool)) {
-	server := it.API().GitpodServer()
+func LaunchWorkspaceFromContextURL(it *Test, contextURL string, serverOpts ...GitpodServerOpt) (nfo *protocol.WorkspaceInfo, stopWs func(waitForStop bool)) {
+	var defaultServerOpts []GitpodServerOpt
+	if it.username != "" {
+		defaultServerOpts = []GitpodServerOpt{WithGitpodUser(it.username)}
+	}
+	server := it.API().GitpodServer(append(defaultServerOpts, serverOpts...)...)
+
 	cctx, ccancel := context.WithTimeout(it.ctx, perCallTimeout)
 	defer ccancel()
 	resp, err := server.CreateWorkspace(cctx, &protocol.CreateWorkspaceOptions{

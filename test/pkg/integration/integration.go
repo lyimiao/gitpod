@@ -46,6 +46,7 @@ const cfgFlagDefault = "$HOME/.kube/config"
 var (
 	cfgFlag       = flag.String("kubeconfig", cfgFlagDefault, "path to the kubeconfig file, use \"in-cluster\" to make use of in cluster Kubernetes config")
 	namespaceFlag = flag.String("namespace", "", "namespace to execute the test against. Defaults to the one configured in \"kubeconfig\".")
+	usernameFlag  = flag.String("username", "", "username to execute the tests with. Chooses one automatically if left blank.")
 )
 
 // NewTest produces a new integration test instance
@@ -55,6 +56,7 @@ func NewTest(t *testing.T, timeout time.Duration) (*Test, context.Context) {
 	flag.Parse()
 	kubeconfig := *cfgFlag
 	namespaceOverride := *namespaceFlag
+	username := *usernameFlag
 
 	if kubeconfig == cfgFlagDefault {
 		home, err := os.UserHomeDir()
@@ -87,6 +89,7 @@ func NewTest(t *testing.T, timeout time.Duration) (*Test, context.Context) {
 		namespace:  ns,
 		ctx:        ctx,
 		ctxCancel:  ctxCancel,
+		username:   username,
 	}, ctx
 }
 
@@ -135,6 +138,9 @@ type Test struct {
 	closer    []func() error
 	ctxCancel func()
 	api       *ComponentAPI
+
+	// username contains the string passed to the test per flag. Might be empty.
+	username string
 }
 
 // Done must be called after the test has run. It cleans up instrumentation
@@ -151,6 +157,11 @@ func (it *Test) Done() {
 			it.t.Logf("cleanup failed: %q", err)
 		}
 	}
+}
+
+// Username returns the username passed to the test per flag. Might be empty.
+func (it *Test) Username() string {
+	return it.username
 }
 
 // InstrumentOption configures an Instrument call
