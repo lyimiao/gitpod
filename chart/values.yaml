@@ -751,7 +751,7 @@ loki:
 
     memberlist:
       join_members:
-        - loki-headless.gitpod.svc.cluster.local
+        - loki-headless
       max_join_backoff: 1m
       max_join_retries: 10
       min_join_backoff: 1s
